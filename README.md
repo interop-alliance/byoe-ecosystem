@@ -9,6 +9,9 @@ that belongs to the ecosystem rather than to any one repo.
 - [LEARNINGS.md](LEARNINGS.md) -- durable cross-repo invariants, gotchas,
   and process recipes, plus the routing table to where each convention is
   canonical.
+- [CONTRIBUTING.md](CONTRIBUTING.md) -- the two-tier contribution model:
+  what casual contributors can ignore, and the bookkeeping core maintainers
+  own at merge.
 
 Per-repo conventions (roadmap schema, releasing, code style, decision
 records) stay canonical in

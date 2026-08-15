@@ -41,7 +41,7 @@ at the start of any cross-repo task.
 - Decision records: cross-repo decisions get a `decisions/NNNN-slug.md`
   record in the owning repo; the template and convention live in
   isomorphic-lib-template `decisions/`.
-- Terminology: `clientId` / `writerId`, never "device" (defined in the
+- Terminology: `clientId` / `writerId` as opposed to "device" (defined in the
   wallet repos' AGENTS.md files).
 
 ## Cross-repo invariants and gotchas
@@ -93,12 +93,18 @@ same code works in node and in real browsers. In repos whose vitest default
 is jsdom (needed for React component tests), any test file that derives a
 key agent or signs must start with `// @vitest-environment node`.
 
-### ezcap convenience methods send the wrong WAS actions
+### Talk to WAS through was-client handles, not raw ezcap
 
-`ZcapClient.read()` / `.write()` send `action: 'read'` / `'write'`, but the
-WAS action vocabulary is HTTP verbs. For node-side WAS invocations use
-`request({ method: 'GET', action: 'GET' })` (etc.). Learned 2026-08-03
-writing server-side e2e assertions.
+For node-side WAS invocations (e2e assertions, scripts, acting as a
+grantee), use was-client: `WasClient.fromCapability()` rebuilds a pre-bound
+Space/Collection/Resource handle from a received zcap, and the typed
+helpers (`get()`, `put()`, ...) send the correct actions. Even was-client's
+`request()` escape hatch defaults `action` to `method`. The trap this
+avoids: ezcap's `ZcapClient.read()` / `.write()` conveniences send
+`action: 'read'` / `'write'`, but the WAS action vocabulary is HTTP verbs,
+so raw-ezcap calls against WAS fail authorization unless every call passes
+an explicit verb action. Learned 2026-08-03 writing server-side e2e
+assertions with raw ezcap.
 
 ### grep silently skips files containing NUL bytes
 
@@ -110,5 +116,4 @@ skips the whole file with no warning, so a "no matches" sweep can lie. Use
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;
-  this file was created 2026-08-15, modeled on the keri-ts project's
-  compaction-governed learnings layer.
+  this file was created 2026-08-15.

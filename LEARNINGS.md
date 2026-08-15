@@ -110,6 +110,5 @@ skips the whole file with no warning, so a "no matches" sweep can lie. Use
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;
-  this file starts from the 2026-08-15 keri-ts survey (see
-  freewallet `_spec/keri-ts-survey-learnings.md` for the survey and the
-  adoption verdicts behind this file's design).
+  this file was created 2026-08-15, modeled on the keri-ts project's
+  compaction-governed learnings layer.

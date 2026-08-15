@@ -6,9 +6,11 @@ given kind of change goes. This map routes; the per-repo ARCHITECTURE.md and
 AGENTS.md files hold the depth. Kept current by hand -- when a repo's role
 or a dependency edge changes, update this map in the same working session.
 
-All repos have local checkouts under `~/code/Interop/` unless noted.
 Private repos are marked; everything else is public on GitHub
-(interop-alliance, or w3c-ccg for the WAS spec).
+(interop-alliance, or w3c-ccg for the WAS spec). If you have a sibling repo
+checked out locally, read it there instead of fetching -- but never assume a
+particular checkout layout, and check with the maintainer before editing a
+repo other than the one you are working in.
 
 ## Layer map (dependency direction, apps at the top)
 
@@ -51,11 +53,11 @@ wallet-core.
 
 ## Specs and their implementations
 
-| Spec repo | Owns | Implemented by |
-| --- | --- | --- |
-| wallet-attached-storage-spec (W3C CCG; co-edited here) | Space / Collection / Resource model, HTTP API, zcap profile | was-teaching-server (authoritative protocol description in its AGENTS.md), was-client, storage-core |
-| app-connect-spec | AppConnectQuery, app-key credential, descriptor vocabulary, action ceilings, response VP | wallet-core `/request`, was-react, both wallets |
-| encrypted-collections-spec | Envelope cryptography, key epochs, recipient derivation | was-client `/edv`, wallet-core `/keys` |
+| Spec repo                                              | Owns                                                                                     | Implemented by                                                                                      |
+|--------------------------------------------------------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| wallet-attached-storage-spec (W3C CCG; co-edited here) | Space / Collection / Resource model, HTTP API, zcap profile                              | was-teaching-server (authoritative protocol description in its AGENTS.md), was-client, storage-core |
+| app-connect-spec                                       | AppConnectQuery, app-key credential, descriptor vocabulary, action ceilings, response VP | wallet-core `/request`, was-react, both wallets                                                     |
+| encrypted-collections-spec                             | Envelope cryptography, key epochs, recipient derivation                                  | was-client `/edv`, wallet-core `/keys`                                                              |
 
 Each spec repo's AGENTS.md carries the "Parties to this contract" table --
 the enforced consumer registry. A normative change's checklist is a walk of
@@ -110,13 +112,13 @@ the owning table; conformance-suite tests servers against the WAS spec.
 - Cross-repo decisions get a `decisions/NNNN-slug.md` record in the owning
   repo (convention in isomorphic-lib-template `decisions/`).
 
-## Honesty notes
+## Caveats
 
 - dcw and life-advisor are private; their rows in the parties tables are
   flagged as such, and this map's claims about them come from their
   AGENTS.md files, not public code.
-- The foundation-fork list is illustrative, not exhaustive (~70 checkouts
-  exist under `~/code/Interop/`; most are low-churn forks that do not
-  participate in the conventions rollout).
+- The foundation-fork list is illustrative, not exhaustive; the full fork
+  inventory is considerably larger, and most of it is low-churn code that
+  does not participate in the conventions rollout.
 - This map states current state only; intent and open work live in the
-  repos' `_spec/ROADMAP.md` files, not here.
+  repos' own roadmaps, not here.

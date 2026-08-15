@@ -20,7 +20,9 @@ at the start of any cross-repo task.
   existing entry or the follow-ups list; do not add chronology.
 - At the end of a task that produced a cross-repo lesson, record it here in
   the same working session -- one entry: the rule, why it holds, and one
-  concrete example or pointer. Convert relative dates to absolute.
+  concrete example or pointer. Convert relative dates to absolute. Describe
+  the originating work by what it was, not by a repo's roadmap item id --
+  those live in gitignored planning files and mean nothing here.
 - Delete entries that stop being true. Compact the file when it grows noisy;
   split by topic only if a section outgrows the rest, and keep this file as
   the routing index if that happens.
@@ -112,6 +114,22 @@ A source file with a literal NUL byte (e.g. was-react `src/config.ts`, a
 `.join('\0')` written as a raw byte) is treated as binary: plain `grep`
 skips the whole file with no warning, so a "no matches" sweep can lie. Use
 `grep -a` when a sweep must be exhaustive.
+
+### did:webvh verification methods: extra properties survive, unwired VMs default into `authentication`
+
+Two facts about `@interop/did-method-webvh`'s document assembly
+(`normalizeVMs` / `createDIDDoc`) that any repo publishing verification
+methods through `createDID` / `updateDID` should know. First, a VM object
+is spread into the document verbatim, so custom properties (e.g.
+wallet-core's `publicKeyCommitment` entries for low-entropy-derived unlock
+keys) survive creation, updates, resolution, and the did:web projection.
+Second, a VM with no `purpose` is wired into `authentication` by default --
+but explicit relationship arrays passed alongside `verificationMethods`
+override the purpose-derived wiring wholesale. Wallet-core's ceremonies
+always pass all five relation arrays, which is what keeps a
+keyAgreement-only entry out of `authentication`; a new call site that
+omits the arrays would silently grant unintended relations. Learned
+2026-08-15 building the hash-commitment unlock-key posture entries.
 
 ## Current follow-ups
 

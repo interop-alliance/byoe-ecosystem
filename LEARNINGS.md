@@ -131,6 +131,18 @@ keyAgreement-only entry out of `authentication`; a new call site that
 omits the arrays would silently grant unintended relations. Learned
 2026-08-15 building the hash-commitment unlock-key posture entries.
 
+### did:webvh document `@context`: updates preserve it
+
+`@interop/did-method-webvh`'s `updateDID` with the `context` option unset
+PRESERVES the prior entry's `@context` (falling back to the base pair only
+when the document never had one), so a context added at genesis or in one
+update survives every later update without threading it through each call
+site. To add a context, pass `additionalContext` (appended after the base
+pair or the carried-forward context, deduplicated); the `context` option
+is the full-override escape hatch and replaces the `@context` wholesale.
+Learned 2026-08-15 adding the `https://w3id.org/byoe` context for
+`MultikeyCommitment` entries.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

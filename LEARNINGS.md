@@ -108,12 +108,55 @@ so raw-ezcap calls against WAS fail authorization unless every call passes
 an explicit verb action. Learned 2026-08-03 writing server-side e2e
 assertions with raw ezcap.
 
+### was-client's `request()` escape hatch throws unmapped errors
+
+`WasClient.request()` is the raw signed-request primitive: it applies NONE
+of was-client's typed-error mapping, so a failed write surfaces as the bare
+ky/http-client error (`name: 'HTTPError'`, `status` on the root), never as
+`PreconditionFailedError`, `NotFoundError`, etc. Any store or ceremony
+seam whose contract is an error NAME (e.g. wallet-core's `WebvhIdStore`,
+which maps `PreconditionFailedError` to the log-conflict rebase) must map
+the raw status itself when it writes through `request()` -- dispatch on
+`err.status === 412` (or 404) and rethrow the typed class. Learned
+2026-08-19 building the companion delegated log store, when freewallet's
+shipped `unlockLogStore` turned out to rely on a comment claiming the
+typed error surfaced from `request()`: its bridge-delegated `did.jsonl`
+CAS could never detect a lost race. wallet-core's
+`delegatedWebvhLogStore` (0.46.0) is the shared, correctly mapped
+implementation.
+
 ### grep silently skips files containing NUL bytes
 
 A source file with a literal NUL byte (e.g. was-react `src/config.ts`, a
 `.join('\0')` written as a raw byte) is treated as binary: plain `grep`
 skips the whole file with no warning, so a "no matches" sweep can lie. Use
 `grep -a` when a sweep must be exhaustive.
+
+### Multikey decoding: use data-integrity-core's decodeMultikey, not hand-rolled header compares
+
+`@interop/data-integrity-core`'s `/multihash` subpath (8.7.1) exports
+`decodeMultikey({ multikey, expectedCodec })`: `z`-prefix check, base58btc
+decode, multicodec varint parse, codec expectation, and per-codec key-length
+validation, covering the Ed25519/X25519 and NIST P-curve public AND private
+codecs. New decode sites should call it instead of comparing header bytes.
+A 2026-08-16 sweep found the hand-rolled versions consistently under-check,
+in two recurring ways:
+
+- Missing prefix check: helpers that strip the first character without
+  testing for `z` (x25519-key-agreement-key's `multibaseDecode` and its
+  copies) silently mis-decode a `u`-base64url string as base58.
+- Missing length check: header-only compares (did-method-webvh's
+  `decodeEd25519Multikey`) accept a 4-byte payload with an `ed01` prefix.
+
+Two wire facts the decoder encodes, worth knowing when reading key bytes
+anywhere: ed25519-priv multikeys come in two lengths -- the Multikey spec's
+32-byte seed and the legacy 64-byte seed||pub form that
+ed25519-verification-key still emits by default -- so length checks on that
+codec must accept both; and P-curve public multikeys are compressed SEC1
+points (33/49/67 bytes for P-256/384/521), so a raw or uncompressed point is
+malformed. Migrations of existing suites must preserve their pinned error
+messages (or result-object contracts, e.g. `verifyFingerprint`) by catching
+the primitive's throw and mapping it.
 
 ### did:webvh verification methods: extra properties survive, unwired VMs default into `authentication`
 
@@ -142,6 +185,51 @@ pair or the carried-forward context, deduplicated); the `context` option
 is the full-override escape hatch and replaces the `@context` wholesale.
 Learned 2026-08-15 adding the `https://w3id.org/byoe` context for
 `MultikeyCommitment` entries.
+
+### webvh prerotation: a client can never remove its own update key
+
+Under the ecosystem's prerotation convention a log entry verifies
+against its own re-stated `updateKeys` (each hashing into the previous
+entry's `nextKeyHashes`), so no entry can both remove a client's update
+key and be signed by it -- self-revocation of a fully enrolled client
+is structurally impossible for that client, not merely refused by
+wallet-core's guard. Any "disconnect myself" ceremony needs a second
+authority: another enrolled client, the standing unlock credential's
+ladder, or a partial retirement that removes the verification methods
+while leaving the (now dead) update key behind. Learned 2026-08-16
+implementing freewallet's ephemeral-client logout (FW-156; the ceremony
+choice is FW-168).
+
+### A policy check inside a pre-verification callback runs on unverified input
+
+When a callee invokes a caller-supplied callback before its own
+verification step (e.g. a kernel's `authorize` callback that runs before
+the signature check), a policy or admission check placed inside that
+callback sees attacker-chosen input, and its refusal carries the wrong
+error class if the input turns out to be forged. Put such checks after
+the verifying call returns, on the confirmed-verified result. When a
+consumer's error-class predicate gates a hard failure against a soft one,
+test the forged-input case against the class it actually surfaces with,
+not the class the check was written to raise. Learned 2026-08-22 fixing
+vh-resource-log's `admitAppend` hook (VRL-1), which ran inside the
+did:webvh kernel's `authorize` and so was consulted on an unverified
+proof.
+
+### Scanner error contracts differ by localization, on purpose
+
+The two wallets render a failed QR scan or paste differently, and the
+split is deliberate rather than drift. dcw's callbacks throw
+`HumanReadableError` with a finished English message and the surface
+renders `err.message` as-is (`app/lib/error.ts`, `errorMessageFrom`);
+anything else is logged and shown as a fixed fallback. freewallet's
+callbacks throw typed error classes carrying a `code`, and the surface
+maps each to an i18n key (`src/lib/resolveCredentialsInputErrorMessage.ts`
+over `ScanCredentialQrDialog` and the add-credential page). A
+pre-rendered message cannot be translated, so a localized app must keep
+the mapping at the surface. When lifting scan or paste logic into
+wallet-core, throw typed errors with a stable name and code and leave the
+message choice to each app; do not port `HumanReadableError`. Recorded
+2026-08-22 closing freewallet FW-101.
 
 ## Current follow-ups
 

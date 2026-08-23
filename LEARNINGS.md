@@ -290,6 +290,31 @@ kernel's loop, and the admission hook gained an explicit order-insensitivity
 obligation over its per-proof key list. See vh-resource-log's
 `decisions/0002-one-controller-version-per-entry.md`.
 
+### Verify a sibling repo consumes a module before designing convergence around it
+
+Freewallet's FW-292 design (the unlock-methods registry's write protocol)
+was drafted, and its wallet-core extraction sequenced, on the premise that
+dcw restates the registry helpers and would be converged by version bump.
+The premise was false: dcw holds no unlock-methods registry at all, a
+recorded dcw product decision (its ARCHITECTURE.md defers recovery codes
+to web for exactly this reason). The false claim propagated into the
+roadmap item's `touches:` dcw line, a consumer-enumeration claim ("dcw's
+counterparts of all of these"), a guard's "both callers" clause, and the
+extract-before-fixes sequencing rationale -- and it fell only to the
+adversarial review's consumer-completeness charter, after which the
+sequencing decision had to be re-made (the fixes now land before the
+extraction, freewallet FW-293..299 then wallet-core WC-150).
+
+The lesson: "dcw and freewallet share the ceremonies" does not imply dcw
+consumes any particular module, and a `touches:` line or shared-code claim
+about a sibling repo is a checkable fact, not an assumption -- grep the
+sibling's source for the exported names, and read its ARCHITECTURE.md for
+a recorded decision NOT to hold the thing, before any convergence or
+extraction is sequenced on it. An extraction whose consumer does not exist
+is preparation for a possible future, and should be prioritized (and
+ordered against fixes) as that, not as convergence of shipped
+restatements. Recorded 2026-08-23 closing freewallet FW-292.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

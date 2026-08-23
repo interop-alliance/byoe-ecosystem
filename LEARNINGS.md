@@ -215,6 +215,25 @@ vh-resource-log's `admitAppend` hook (VRL-1), which ran inside the
 did:webvh kernel's `authorize` and so was consulted on an unverified
 proof.
 
+### On an append-only log, the writer runs the reader's full check before the write
+
+Where one refused entry rejects the whole log for every reader and an
+appended entry cannot be removed, a writer that builds an entry and
+sends it straight away can poison the log it still reads: a key removed
+at the controller head, a malformed caller-supplied timestamp, or a
+signer seam whose key and signature disagree all write durably and fail
+on read-back. The fix is a pre-write pass that runs the reader's full
+per-entry verification over the candidate (shape, chain, proofs,
+authorization at the head's floor, the admission hook), from the same
+code the read loop uses, so the writer refuses exactly what the reader
+would. A subset of the checks (policy only, say) leaves the same hazard
+open one member over, and a consumer with its own write path must call
+the same exported check rather than re-derive part of it. Read-back
+stays the only evidence of durability; the pass is self-protection, not
+an authorization boundary. Learned 2026-08-22 on vh-resource-log VRL-2
+(`verifyResourceLogAppend`), where wallet-core's roster store carried
+only the license half of the check inline.
+
 ### Scanner error contracts differ by localization, on purpose
 
 The two wallets render a failed QR scan or paste differently, and the
@@ -230,6 +249,23 @@ the mapping at the surface. When lifting scan or paste logic into
 wallet-core, throw typed errors with a stable name and code and leave the
 message choice to each app; do not port `HumanReadableError`. Recorded
 2026-08-22 closing freewallet FW-101.
+
+### Coined terms get retired in favor of ecosystem vocabulary
+
+The resource-log profile called the `versionId` DID parameter on an entry
+proof's `verificationMethod` its "anchor". The word is not Data Integrity or
+DID Core vocabulary, and it collided with three unrelated senses already in use
+(ladder-anchored, credential-anchored genesis, trust anchor). On 2026-08-22 it
+was retired for "controller versionId" across encrypted-collections-spec,
+vh-resource-log (code, ARCHITECTURE.md glossary, ROADMAP, design doc),
+wallet-core's `resourceLog/` module, and app-connect-spec decision 0003.
+
+When naming a profile concept, reuse the term the underlying spec already has
+(here DID Core's `versionId`) and qualify it (`controller versionId`) rather
+than coining a new noun. Before a rename, grep every sibling repo and tag each
+hit by sense; renames that touch a public member (`headAnchorIndex` to
+`headControllerVersionIndex`) are breaking and ship with the next major of the
+library, with the consumers' range bumps in publish order.
 
 ## Current follow-ups
 

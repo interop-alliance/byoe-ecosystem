@@ -224,7 +224,7 @@ at the controller head, a malformed caller-supplied timestamp, or a
 signer seam whose key and signature disagree all write durably and fail
 on read-back. The fix is a pre-write pass that runs the reader's full
 per-entry verification over the candidate (shape, chain, proofs,
-authorization at the head's floor, the admission hook), from the same
+authorization at the head controller version, the admission hook), from the same
 code the read loop uses, so the writer refuses exactly what the reader
 would. A subset of the checks (policy only, say) leaves the same hazard
 open one member over, and a consumer with its own write path must call
@@ -266,6 +266,29 @@ than coining a new noun. Before a rename, grep every sibling repo and tag each
 hit by sense; renames that touch a public member (`headAnchorIndex` to
 `headControllerVersionIndex`) are breaking and ship with the next major of the
 library, with the consumers' range bumps in publish order.
+
+### A per-entry rule checked per element needs the reduction before the check
+
+When a rule is written for a whole record but the verifier checks it element by
+element (each element's signature or membership), compute the reduction from
+elements to one record-level value before running the per-element check, and do
+it before any per-element loop that has no lookahead -- a call for element 1
+cannot see element 2, so the reduction cannot be discovered mid-loop. A related
+fact worth checking whenever a record carries an array outside its hash and
+outside every signature: a host can reorder, duplicate, or delete elements of
+that array undetected. Deletion is the sharper case when each element's
+signature covers only that element and the record minus the array: a strict
+non-empty subset of the array still verifies, so any count taken from the
+verified elements is a lower bound, not the true count. Any code that reduces
+or counts over the array must be set-based (order- and
+multiplicity-insensitive) and must not treat that count as complete. Learned
+closing vh-resource-log's VRL-4 (an entry's proofs
+each carried their own controller version, reduced by taking the maximum after
+every proof verified, letting a removed member's proof ride on a co-signer's
+version); the reduction moved to a pre-pass before the proof-verification
+kernel's loop, and the admission hook gained an explicit order-insensitivity
+obligation over its per-proof key list. See vh-resource-log's
+`decisions/0002-one-controller-version-per-entry.md`.
 
 ## Current follow-ups
 

@@ -342,6 +342,16 @@ playwright webServer command). The replay-outside-the-app step is also
 the cheap discriminator between "our ceremony code broke" and
 "the bundle is stale". Recorded 2026-08-25 closing freewallet FW-315.
 
+The same staleness runs the other way, and it bites the useful test:
+editing an installed or `link:`ed package's dist to reproduce a
+pre-fix state changes nothing the pre-bundle serves, so the "before"
+run passes and reads as a fix that was never needed. Vite invalidates
+the pre-bundle on a lockfile or package.json change, not on a file
+edit under `node_modules`. Run that comparison with `vite --force` (or
+clear `node_modules/.vite` between the two runs). Recorded 2026-08-28
+closing freewallet FW-359, whose pre-fix 404 was only reproducible
+that way.
+
 ### A ceremony mend entry point must classify from the last sub-stage's artifact
 
 A mend function for a multi-stage ceremony often has to decide which arm to

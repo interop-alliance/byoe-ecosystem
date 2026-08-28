@@ -406,6 +406,26 @@ own greps -- `\ba <vowel-word>` and a backreference for a repeated word
 across an optional comment marker -- run after the sed and before the review.
 Recorded 2026-08-27 closing freewallet FW-368.
 
+### A relation-asymmetry recognition rule has one owner and many copies -- walk them all
+
+The ladder-VM recognition rule ("in `capabilityDelegation`, absent from
+`capabilityInvocation`") is implemented independently in three places --
+wallet-core's `ladderVmIds` (webvh/listClients.ts), wallet-core's
+`inventoryOf` (resourceLog/controller.ts, feeding the ceremony-tail
+license), and the server's `clientAnnexClause.ts` -- and its normative
+home is a fourth: app-connect-spec `decisions/0003`. FW-359's design
+review found the doc had enumerated two of the four; the third copy was
+the one whose divergence would surface as `ResourceLogLicenseError` far
+from the change.
+
+The rule: when a design changes any verification method's published
+relation set, grep every repo for the asymmetry predicate itself (both
+relation names in one function), not just for readers of the document,
+and cite the decision record that owns the rule so the revisit trigger
+names it. A negative-space rule ("skipped because it does not match")
+is still a consumer, and it is the kind no export-map walk finds.
+Recorded 2026-08-28 reviewing freewallet FW-359's design.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

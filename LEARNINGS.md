@@ -315,6 +315,97 @@ is preparation for a possible future, and should be prioritized (and
 ordered against fixes) as that, not as convergence of shipped
 restatements. Recorded 2026-08-23 closing freewallet FW-292.
 
+### A pnpm install under a live vite dev server poisons the dep-optimize cache
+
+During freewallet FW-315's e2e sweep, a `pnpm install` landed (a
+version drift re-resolve) while the playwright-managed vite dev server
+was up. Two distinct poisonings followed, both surfacing as app
+failures with nothing wrong in the source. First, immediately: the
+install pruned `.pnpm` paths the running server held, so every page
+load got ENOENT on vite-served chunks and rendered an empty shell.
+Second, and far subtler, afterwards: `node_modules/.vite` (the
+dep-optimize pre-bundle) rebuilt against the mid-churn node_modules
+and kept serving that stale bundle across server restarts. The symptom
+was a false integrity refusal -- `ResourceLogIntegrityError` from the
+bundled `@interop` verifier chunks -- in exactly one e2e spec, while
+the same verification replayed clean in node against the same on-disk
+bytes with the same installed packages. Deleting `node_modules/.vite`
+and rerunning with zero source change fixed it.
+
+The lesson, for every vite app repo in the ecosystem (freewallet, the
+was-react examples): a failure that only the bundled app exhibits,
+while the installed library verifies the same data clean in node, is a
+stale pre-bundle until proven otherwise -- and after any `pnpm
+install` that lands while a dev server is running, clear
+`node_modules/.vite` before trusting an e2e run (or add the rm to the
+playwright webServer command). The replay-outside-the-app step is also
+the cheap discriminator between "our ceremony code broke" and
+"the bundle is stale". Recorded 2026-08-25 closing freewallet FW-315.
+
+### A ceremony mend entry point must classify from the last sub-stage's artifact
+
+A mend function for a multi-stage ceremony often has to decide which arm to
+run: "the whole thing needs a re-run" versus "only the last step needs
+finishing". That decision must probe the durable artifact of the LAST
+sub-stage the finishing arm assumes is already done, not an earlier stage's
+signal. wallet-core's `mendCredentialAnchoredAccount` classified "the
+establishment already ran, only the record needs re-binding" by attribution
+of the published log -- a signal an early sub-stage sets. A tear after the
+log published and its update key revealed, but before the account's
+`#DelegatedClients` pointer was written, still satisfied that signal, so the
+mend took the re-bind arm and threw on the missing pointer; the full
+establishment re-run that would actually have healed the tear never ran,
+leaving that tear permanently unmendable. The fix gated the re-bind arm on
+the pointer itself being present in the published document, and let every
+earlier tear fall through to the full re-run, each of whose stages is an
+ensure and converges safely either way.
+
+The general rule: an arm that assumes "the ceremony completed through stage
+N" must probe stage N's own artifact. Attribution of an earlier stage's
+output is satisfied by every tear at or after that stage, so it misclassifies
+every later one. Recorded 2026-08-26 closing freewallet's credential-anchored
+mend-entry-point work (paired with wallet-core).
+
+### A delegated capability is tested by invoking it, not by asserting its shape
+
+A test that checks a minted zcap's fields -- parent, `expires`,
+`allowedAction`, target -- passes just as happily on a capability no server
+will ever accept, because none of those fields carry the delegator's
+authority. Only an invocation against a server that resolves the delegator's
+document exercises the proof. Freewallet's public-terminal App Connect e2e
+asserted exactly that field set on a grant whose delegation proof could never
+verify, and shipped; the break surfaced from a BYOE example app in the field,
+as a 404 on every request the grantee made. Budget one end-to-end invocation
+per capability-minting path, and treat shape assertions as a supplement to it.
+Recorded 2026-08-27.
+
+### A vocabulary rule from an app repo needs its neutral form in the shared library
+
+Freewallet's `decisions/0011` settled that "durable" names server-backed
+storage only, and named the middle tier "browser-local". Carrying the rule
+into wallet-core exposed the limit: wallet-core also serves DCW, where a
+browser is not what persists anything. The shared library took
+"client-local" instead -- the tier named off the repo's existing `clientId`
+axis, so it reads right for a browser profile and a phone alike -- and
+freewallet's "browser-local" is documented as its app-side specialization.
+Both Glossaries say so, and neither word had to lose.
+
+The rule: when an app repo's domain decision reaches a shared package, check
+each coined term against every consumer before copying it across. The app is
+free to name a tier for its own runtime; the library needs the term that is
+true for all of them, plus an explicit line mapping the two. Copying the app's
+word into the library is how a package acquires vocabulary that is wrong for
+half its consumers.
+
+A phrase-level bulk rename also needs a pass no toolchain gives you. Renaming
+"durable client" to "enrolled client" across 200-odd comment sites left two
+classes of damage that tsc, eslint, and prettier all accept: article
+agreement ("a enrolled client"), and duplicated words where the old phrase
+straddled a line wrap ("last enrolled\n * enrolled client"). Both need their
+own greps -- `\ba <vowel-word>` and a backreference for a repeated word
+across an optional comment marker -- run after the sed and before the review.
+Recorded 2026-08-27 closing freewallet FW-368.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

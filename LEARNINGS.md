@@ -303,7 +303,7 @@ counterparts of all of these"), a guard's "both callers" clause, and the
 extract-before-fixes sequencing rationale -- and it fell only to the
 adversarial review's consumer-completeness charter, after which the
 sequencing decision had to be re-made (the fixes now land before the
-extraction, freewallet FW-293..299 then wallet-core WC-150).
+extraction, freewallet FW-293..299 then wallet-core WC-193).
 
 The lesson: "dcw and freewallet share the ceremonies" does not imply dcw
 consumes any particular module, and a `touches:` line or shared-code claim
@@ -435,6 +435,109 @@ and cite the decision record that owns the rule so the revisit trigger
 names it. A negative-space rule ("skipped because it does not match")
 is still a consumer, and it is the kind no export-map walk finds.
 Recorded 2026-08-28 reviewing freewallet FW-359's design.
+
+### An "ensure" ceremony's completion callback fires on the adopt branch too
+
+wallet-core's `ensureDidWebvh` reports `onDidPublished({ did })` whether it
+created the log or adopted one already there. Freewallet's callback
+invalidated the session's verified-log memo unconditionally, which was
+harmless while nothing read that memo synchronously. FW-344 made the
+DIDAuth holder dispatch a memo-only read, and the review found the
+ordinary remembered login now emptied the memo between the post-login
+gate and the approve-time dispatch, so a webvh-only request was answered
+with did:key. The adopt branch publishes nothing, so there was nothing to
+drop.
+
+The rule: a callback named for a write ("published", "committed") on an
+ensure-shaped ceremony fires on the no-op branch as well, unless the
+contract says otherwise. A consumer that clears cached state in it must
+compare what the callback reports against what it holds, and clear only
+on a change. When adding a synchronous reader over a memo, grep for every
+invalidation site and ask which of them fire on the default login path.
+Recorded 2026-09-03 closing freewallet FW-344.
+
+### A derived projection is only as fresh as its last authorized writer
+
+`id/did.json` is the did:web projection of a did:webvh log: derived from
+`did.jsonl`, and stale the moment an entry publishes without a writer for it.
+Whether a ceremony can refresh it is a question about authority, not about
+the ceremony. A standing unlock credential's bridge delegation is a PUT on
+exactly `did.jsonl`, so every ladder-signed entry writes the log alone, and
+the projection kept naming a client the last-client transition removed or a
+credential a transient recovery retired. WAS authorization never noticed.
+The server resolves a Space's controller from the log and reads the
+projection nowhere, which is why the drift survived: the account works
+perfectly while did:web verifiers accept revoked keys.
+
+Two placements close a gap like this without widening anything. A ceremony
+whose own authority ends at its entry writes the derived resource
+immediately BEFORE that entry, under the authority it still holds; a run
+torn in between leaves the derived copy under-listing what the log has,
+which is the fail-closed direction for a verifier and is re-written by the
+re-run. And a standing mender needs some caller with a writer on the
+ordinary path: here the client annex's generation delegation, whose target
+is the account Space's items subtree, which already covers `id/did.json`,
+so a credential-only visit republishes with no server predicate change and
+no re-minted bridge. Compare-then-write, so a healthy account pays one GET.
+
+The rule: for every resource a wallet derives from a log, name the writers
+of the derived copy separately from the writers of the log, and check the
+narrowest one against every ceremony that changes what the log says. A
+delegation scoped to one resource is a scope on which resources can be kept
+consistent, not only on what can be published. Recorded 2026-09-03 closing
+freewallet's stale-projection item (wallet-core `ensureDidWebProjection`,
+the removal ceremonies' pre-entry PUT, freewallet `decisions/0018`).
+
+### A verifier-side license must track a ladder's current rung, not its introducing one
+
+wallet-core's ceremony-tail license clause B admits a ladder-signed roster
+append only when the entry it anchors at was signed by a rung the log
+attributes to the appending ladder. WC-190's first attribution pass
+anchored a ladder at the rung that introduced its verification method and
+stopped there, which is wrong the moment that rung is spent: a
+self-enrollment retires the rung it uses, and every passkey account
+self-enrolls at signup by construction, so the very first login of a
+passkey account would already be attributing a rung the log no longer
+authorizes. The fix climbs the attribution forward with the log, by the
+last-position rule `decisions/0007` already states for the reveal/commit
+hash order: an entry that reveals exactly one new update key it also
+signed is the ladder's next rung when an earlier entry committed that
+key's hash last among its own additions, while the ladder's VM still
+stands.
+
+The rule: a verifier-side license or attribution keyed to "who controls
+X" must track X's CURRENT holder, not the holder at the moment X was
+introduced, whenever anything in the system can rotate X on its own --
+self-enrollment rotates a ladder's active rung the same way a client
+revocation rotates a roster's recipient set. And any new license shape is
+a whole-log refusal to a reader that has not shipped it (the admission
+hook throws and the verifier propagates it), so its rollout is
+verifier-first: every reader of the governed log ships the shape before
+any writer emits an append that needs it. dcw's DCW-71 is the pending
+consumer of this shape and must land before dcw's own ladder-branch
+writers can emit shape-3 appends. Recorded 2026-09-04 closing wallet-core
+WC-190.
+
+### The next roadmap id is a counter, not a scan
+
+Every roadmap in the ecosystem moves completed items out of ROADMAP.md
+into an archive file, and completed items are the newest ones. So the
+highest id almost always sits in the archive, and an agent that derives
+the next id from the open roadmap alone reuses one. On 2026-09-04 that
+had happened in both freewallet (open max FW-423, archive max FW-425) and
+wallet-core (open max WC-186, archive max WC-193). Re-deriving the id
+from both files on every filing is also wasted work.
+
+The fix is a `nextAvailableId: <n>` line directly under the H1 of every
+ROADMAP.md, the sole source of the next id: filing an item takes `n` and
+rewrites the line to `n + 1` in the same edit. Seeded from the archive's
+max plus one, never from the open roadmap's. One recovery rule covers
+drift (a stale branch, a hand edit): if the counter's id already appears
+in either file, reset the counter to one past the highest id across both,
+then take it. Seeded 2026-09-04 in freewallet, wallet-core,
+isomorphic-lib-template, was-client, was-react, was-teaching-server, and
+dcw; the rule text is canonical in isomorphic-lib-template's AGENTS.md and
+mirrored in each repo's AGENTS.md and roadmap header.
 
 ## Current follow-ups
 

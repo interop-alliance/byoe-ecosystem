@@ -26,6 +26,14 @@ Shared wallet    +---------- wallet-core ---------+
 layer                (ceremonies, keys, keyring, enrollment, recovery,
                       clients, request/App Connect, webvh, genesis)
                                   |
+Replica sync     freewallet and was-react also depend directly on
+                 was-sync (RxDB replication driver + controller core;
+                 root + ./rxdb + ./testing) -- not through wallet-core,
+                 and not consumed by dcw, which runs wallet-core's own
+                 ./sync pull/push engine over SQLite instead. Depends on
+                 was-client (peer) and social-core (remotePayloadWins);
+                 only ./rxdb needs the external rxdb package (peer).
+                                  |
 Storage/wire            was-client (+ /edv, /sync)
                      (WAS HTTP client, EDV cipher, key epochs, sync wire)
                                   |
@@ -85,6 +93,11 @@ the owning table; conformance-suite tests servers against the WAS spec.
   putting it there, never app-side.
 - Envelope/cipher/epoch mechanics, the sync wire contract, or WAS HTTP
   client behavior: was-client.
+- RxDB replica policy (the replication driver, the controller core, the
+  conflict-handler seam): was-sync, consumed directly by freewallet and
+  was-react. dcw's pull/push engine over SQLite is a separate algorithm
+  in wallet-core's own `./sync` (wallet-core decision 0021), not an
+  implementation of the same one.
 - A new WAS endpoint or authorization rule: the WAS spec first, then
   was-teaching-server, then was-client -- with the parties-table walk.
 - App Connect wire shapes (query, credential, descriptors, ceilings):

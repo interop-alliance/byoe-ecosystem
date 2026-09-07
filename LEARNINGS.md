@@ -315,6 +315,16 @@ is preparation for a possible future, and should be prioritized (and
 ordered against fixes) as that, not as convergence of shipped
 restatements. Recorded 2026-08-23 closing freewallet FW-292.
 
+A second instance, 2026-09-05: freewallet FW-447 was filed (out of FW-429's
+touches) to move the recovery spend's registry drop into wallet-core "so
+dcw, which runs the same continuations, gets it". dcw runs no recovery
+continuation and holds no registry, the same recorded decision as above.
+The item was re-scoped to the freewallet-internal consolidation before any
+wallet-core code was written. A `discovered-from` chain carries premises
+forward: an item filed from another item's touches list inherits that
+list's unchecked claims, so the grep is owed at filing time, not only at
+design time.
+
 ### A pnpm install under a live vite dev server poisons the dep-optimize cache
 
 During freewallet FW-315's e2e sweep, a `pnpm install` landed (a
@@ -488,6 +498,20 @@ consistent, not only on what can be published. Recorded 2026-09-03 closing
 freewallet's stale-projection item (wallet-core `ensureDidWebProjection`,
 the removal ceremonies' pre-entry PUT, freewallet `decisions/0018`).
 
+A third placement removes the drift class instead of bounding it: the
+SERVER derives the projection from the log head, so the log is the only
+thing any writer writes. The server already does this for a did:webvh
+Space controller, which it resolves out of `did.jsonl` on every request.
+The log-governed collection encryption descriptors (designed 2026-09-07)
+take it for the Collection Description's `encryption` member: the wallets
+append to a governing log and never PUT a projection, the server serves the
+member as the head's `state` plus `history`, and a direct write of the
+member is refused. The trade is a server feature and a spec clause against
+a per-ceremony PUT, an ensure sweep, and a tear residue in every producer.
+Prefer it whenever the server already stores the log and the derived copy
+is small; the did:web projection stays producer-written only because it
+predates the pattern.
+
 ### A verifier-side license must track a ladder's current rung, not its introducing one
 
 wallet-core's ceremony-tail license clause B admits a ladder-signed roster
@@ -538,6 +562,151 @@ then take it. Seeded 2026-09-04 in freewallet, wallet-core,
 isomorphic-lib-template, was-client, was-react, was-teaching-server, and
 dcw; the rule text is canonical in isomorphic-lib-template's AGENTS.md and
 mirrored in each repo's AGENTS.md and roadmap header.
+
+### Two forks of a stored schema are never "effectively the same file"
+
+An extraction design that merges two forked copies of a module tends to
+grade the smallest files as interchangeable. On 2026-09-05 FW-448's draft
+called freewallet's and was-react's `syncedDocSchema.ts` (42 and 44 lines)
+"effectively the same file, from either copy". The diff was three
+hash-affecting declarations (a `createdBy` property on one side, a
+`required` list and an `updatedAt` index on the other), both at RxDB
+`version: 0`. RxDB hashes a collection's declared schema and refuses
+`addCollections` on a database whose stored hash differs at the same
+version, so adopting either copy would have failed login on every existing
+replica of the other app. The rule: a declaration that a storage engine
+persists (an RxDB schema, a Dexie store definition, a SQLite DDL string) is
+browser-local stored state, and a merge design diffs it byte for byte and
+states the version or invalidation answer before calling it a move.
+
+### On 0.x, a caret pins the minor; a release train lists every range bump
+
+`^0.47.0` admits `0.47.x` and not `0.48.0`. A multi-repo train whose
+consumers hold 0.x caret ranges therefore floats nothing: each publish
+needs an explicit range bump in every consumer, and a consumer left
+behind resolves a second copy of the package beside the one a sibling
+dependency pulled (was-react `^0.47.0` against wallet-core `^0.48.0` of
+was-client, 2026-09-05). Write the train as a table of publishes AND
+bumps, and read the one-resolved-copy lockfile audit as the check that no
+bump was missed rather than as what keeps the tree single-copy. A `link:`
+held in any consumer at the train's start voids the audit there, so the
+train's first step is to publish and drop it.
+
+### A `link:`ed package resolves its peers from its own checkout
+
+A pnpm `link:../pkg` reference symlinks the sibling checkout, and that
+checkout resolves its own `node_modules`. So a linked package that declares
+a peer (`rxdb`, `@interop/was-client`) loads the copy installed in ITS
+directory, not the consumer's, and the consumer's tree holds two physical
+copies of the peer. Two things follow. For types, `tsc` sees two identities
+for one class (`RxCollection` from each copy) and every value handed
+across the boundary fails to assign; the fix while linked is a
+`compilerOptions.paths` mapping for the peer in the consumer, commented
+as link-only and removed with the link (was-react on `@interop/was-sync`,
+2026-09-05). For declaration emit, a consumer whose exported types are
+inferred through a linked dependency's transitive package fails with
+TS2883 "cannot be named"; the fix is an explicit return-type annotation at
+the export, which is correct in registry mode too (wallet-core's
+`keyring/kdf.ts`, same day). For runtime, a peer that installs itself onto
+a class prototype (RxDB's leader-election plugin) lands on the wrong copy,
+and only `resolve.dedupe` in vite keeps the browser bundle single-copy.
+None of this is visible off the registry, which is one more reason the
+train's last step is to publish, drop every link, and re-run the suite.
+
+### A fake WAS server is a second implementation of the contract
+
+A hand-written in-memory WAS fake ("accepts every write, serves a plausible
+feed") is a second implementation of the WAS wire contract, maintained by
+the consumer, and it drifts. was-sync's `FakeWasServer` (removed
+2026-09-05, WS-11) synthesized a `412` for a header-less `DELETE` that a
+real server answers `204`, never assigned `createdBy`, and raised the error
+shapes of a `mapAuthErrors: true` port while the main consumer runs the
+default port. Four of the ten findings from that day's review were cases
+the fake modeled wrongly, and the integration suite passed on all of them.
+was-teaching-server exports an in-process `createApp` (filesystem backend
+into a `mkdtemp` directory, `listen({ port: 0 })`, then set
+`app.serverUrl` to the assigned port), so a driver or client suite runs
+against the real server through the real `createWasSyncPort` for the cost
+of one devDependency. Two things the real server teaches that a fake does
+not: a plaintext collection's `custom` is `{ name, tags }` with `tags` a
+string-to-string record (anything else is `400`), and the replication
+collection needs the package's LWW conflict handler installed explicitly,
+since RxDB's default hands every conflict to the remote.
+
+### A license enforced on the controller adapter binds every log the adapter verifies
+
+wallet-core's ceremony-tail license reads as the roster's rule, and the
+clause that states it is titled "the roster axis", but it is enforced as
+the mandatory admission hook on the did:webvh controller adapter, so every
+resource log verified through that adapter inherits it. The log-governed
+collection descriptors (designed 2026-09-07) were nearly built around a
+license that was never meant for them: a ladder VM already stands under
+`assertionMethod`, so a share from a credential-only session had a valid
+signer for a descriptor append, and the only bar was a hook written for
+the root key's roster. The resolution scoped the license to the roster
+and had the hook take a log class, so a descriptor log passes on
+membership alone (app-connect-spec `decisions/0003`, clause B's scope).
+
+The rule: when a policy is enforced at a shared verification seam, a new
+artifact verified through that seam states which policy applies to it
+when it is introduced, rather than discovering at build time that it
+inherited one. And read the enforcement point, not the decision's title,
+to learn a policy's real scope.
+
+### A collection-level log lives in a sub-resource, and its placement is chosen by its readers
+
+Two placements for a governing log looked natural and both fail. Beside
+the roster in `key-map` is where wallet-core's pin slot id assumed it, and
+`key-map` is private: a share grantee holds a read zcap on the shared
+collection and an app on its own, so neither could read the log the
+pointer named, and the pointer-following reader the log form exists for
+would get the masked 404. As a document of the collection it governs, the
+server's envelope rule refuses it (an encrypted collection accepts only
+envelopes), and a document enumerates in listings and the `changes` feed,
+where the sync driver replicates it as a row. The placement that holds is
+a sub-resource under the collection URL beside `/meta` (settled
+2026-09-07 as `/space/{space_id}/{collection_id}/meta/log`): covered by
+any capability whose target covers the collection, outside its document
+set for listing, replication, and envelope enforcement.
+
+The rule: before naming where a capability-gated resource lives, list
+every reader that must reach it and the capability each one actually
+holds. The wallet's own reach is the easy case; the external reader is
+what decides placement.
+
+### WAS holds the server surface, the profile holds the semantics
+
+The split for log-governed collections follows the one key epochs already
+use. WAS owns what a server does and what a client sends over HTTP: the
+sub-resource and its operations, the minimal line contract (JSON Lines,
+a `state` member per line, last line is the head), the declaration, the
+derivation rule, the problem types, the features flag. The Encrypted
+Collections profile owns what an entry is beyond `state`: proofs, chain,
+`type`, the reserved `history` rule, verification, external authorization,
+and the verifying reader's equality check, none of which the server
+checks. Recorded 2026-09-07 when the governing-log spec item was first
+written as an encryption feature and had to be regeneralized.
+
+The rule: a mechanism that a non-encryption use would need identically is
+WAS text, kept minimal because WAS is a W3C CCG work item and every clause
+costs consensus a profile clause does not; anything cryptographic or
+verification-side stays in the profile, cited by name from WAS rather than
+restated.
+
+### Verify a server claim in source before designing an ordering rule on it
+
+A design pass on 2026-09-07 asserted that the server validates a write's
+`Key-Epoch` stamp against the collection descriptor's epochs, and built an
+ordering hazard on it: a rotation's projection had to land before the
+first write under the new epoch, or the server would refuse the epoch as
+unknown. The header is stored opaquely and never checked
+(was-teaching-server `src/lib/keyEpoch.ts` says so in its header comment).
+The hazard did not exist, and a mender was nearly filed for it.
+
+The rule: a server behavior that a client-side ordering rule depends on is
+cited from the server's source or spec text, not from what the behavior
+"must" be. The teaching server's module headers state what is and is not
+validated; read them before designing around a check.
 
 ## Current follow-ups
 

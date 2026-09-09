@@ -708,6 +708,81 @@ cited from the server's source or spec text, not from what the behavior
 "must" be. The teaching server's module headers state what is and is not
 validated; read them before designing around a check.
 
+### Swapping an unsigned write for a signed log append changes two contracts at every caller
+
+When a resource that consumers wrote with a plain conditional PUT becomes
+log-governed (the per-collection encryption descriptors, 2026-09-07), every
+write site inherits two obligations it never had, and neither shows in the
+store seam's type. First, the append's proof key must stand under
+`assertionMethod` in the controller document at the version the append
+anchors at. A cascade that anchors every collection store at the post-edit
+head (correct) while the app still signs with the credential being retired
+(the login credential on a passphrase change) has every append refused and
+reports the rotation done. Second, the errors a write can raise now include
+the verifier's refusal classes (integrity, fork, license), which a fan-out
+that collects per-collection failures into a retry bucket turns into an
+endless retry with outage copy. The read path already rethrows those by
+`isResourceLogRefusal`; the write path has to as well.
+
+The rule: when a seam's backing changes from host-trusted to verified, walk
+every writer and state the signer rule on each seam's contract text, and
+apply the reader's refusal classification to the writer's failure handling.
+The type of the store does not change, so nothing else will surface it.
+
+### A verified read leaves a host-controlled gate standing wherever a membership test still reads the server
+
+Moving the per-collection encryption descriptors under verified logs
+(freewallet, 2026-09-08) verified what each rotation wrote and read, and
+left the question of WHICH collections a rotation covers on the server's
+word: the cascade's `isEncrypted` probe read the Space listing's derived
+`encryption` member. A host that omits the member for one collection keeps
+it out of every rotation, so it stays keyed to the retired user key
+generation, with every append it does make fully verified. The same shape
+had been closed in wallet-core's mend arm the day before (a fabricated
+absence licensing a fresh roster genesis), and it recurred one layer up
+because the gate is not a read of the resource and so was not on the list
+of reads to move.
+
+The rule: when a resource moves from host-trusted to verified, enumerate
+every predicate over its existence or membership (is it encrypted, does it
+have a roster, is it in the set to rotate), not only the reads of its
+content, and answer each from the verified artifact (the log's head, or the
+absence of a log). The listing may enumerate; it may not decide.
+
+### A self-forget cannot seal the logs it leaves behind
+
+Both forget grades run their collection fan-out before the removal entry,
+the inversion the self-forget forces, so every collection log append anchors
+at a version that still lists the departing client's key. The departing
+client cannot append after the entry (its authority ends there), and on the
+last-client transition no remembered login ever runs again to seal. A
+document-edit-first ceremony seals for free because its fan-out anchors
+post-edit; an inverted one owes an explicit sealing pass from the surviving
+signer, and on a client-less account that signer is the ladder branch, so
+the pass has to be a transient-login stage (freewallet FW-450, 2026-09-08).
+
+The rule: for every ceremony whose fan-out precedes its strike, name the
+sealing pass and who fires it; "the cascade seals" holds for the
+edit-first order only.
+
+### Two consumers carrying the same cast-and-probe means the type belongs upstream
+
+was-client typed the sync port's `putMeta` as optional while its own
+`createWasSyncPort` always supplied it, and its feed page carried the shared
+`unknown` bodies where a consumer needs `Json`. was-sync and was-react each
+answered with the same workaround: cast the whole port through `unknown` and
+probe for `putMeta` at runtime. The cast silenced every other member too, so
+a rename in `query` or `deleteContent` type-checked clean at the seam and
+surfaced only inside a push or pull cycle as an `error$` event. Completing
+the type upstream (required `putMeta`, `Json` bodies; was-client WCL-39,
+was-sync WS-10, 2026-09-08) turned that divergence into a compile error and
+deleted both workarounds.
+
+The rule: an `as unknown as` cast at a package seam is a claim about the
+upstream type, and the same cast in two consumers is a bug report against
+it. Fix the type in the owning `@interop/*` package and alias it downstream,
+so the seam is checked by construction.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

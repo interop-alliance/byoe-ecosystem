@@ -42,7 +42,7 @@ Storage/wire            was-client (+ /edv, /sync)
 
 Side libraries (consumed where needed, no knowledge of the layers above):
   social-core (contacts specs + LWW), verifier-core (VC verification),
-  webkms-client (CapabilityAgent, KMS), ezcap (ZcapClient),
+  capability-agent (CapabilityAgent), webkms-client (KMS), ezcap (ZcapClient),
   did-method-webvh, data-integrity-core (shape guards, VPR vocabulary),
   byoe-context (hosted JSON-LD contexts)
 

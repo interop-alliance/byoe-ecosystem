@@ -783,6 +783,147 @@ upstream type, and the same cast in two consumers is a bug report against
 it. Fix the type in the owning `@interop/*` package and alias it downstream,
 so the seam is checked by construction.
 
+### A registry that describes menders indexes sites its runner must not run
+
+The mender registry keys every login-time repair by the invariant it makes
+true, and its derived-set audit reads one flat index of sites: the two login
+chains' registrations, the routing entries that decide whether a session is
+built at all, and one entry whose own call site fires it before the chain.
+Only the first group is executable. The first build split the index in two
+to keep them apart, which immediately drifted: the audit read one array and
+the runner another, and an entry could sit in either without failing
+anything. The fix was upstream instead -- the shared runner skips a site
+carrying no converger, whichever list the block runs from (wallet-core
+WC-224, freewallet FW-455, 2026-09-09) -- so one index serves both readers
+and a converge-free entry is unrunnable by construction rather than by
+bookkeeping.
+
+The same build wanted a settle point partway through one trigger's list, and
+took an optional registration-list override on the runner rather than a
+second trigger value: the order is one list's order, and a second value
+would have hidden the tail from the audit's single total order.
+
+The rule: when a shared executor reads a table that also serves as
+documentation, make the non-executable rows unrunnable in the executor, not
+in the caller's copy of the table.
+
+### A link: consumer under jest needs the linked package's nested deps transformed
+
+dcw consumed an unpublished wallet-core through `link:../wallet-core` to
+build DCW-74 (2026-09-09). Its jest suite then failed to load the package:
+the linked tree resolves its own dependencies out of wallet-core's
+`node_modules/.pnpm`, which jest's default `transformIgnorePatterns` skips,
+and the linked package pulled a second `@babel/runtime` copy. Two config
+lines fix it: add the linked package's nested `.pnpm` path to the transform
+set, and map `@babel/runtime` back to the consuming project's copy. Both
+are inert once the dependency comes from the registry again, so they can
+stay until the next `link:` needs them.
+
+The rule: a `link:` reference changes module resolution for the test
+runner as well as for tsc, so check the runner's transform and mapping
+config before reading a load failure as a code defect.
+
+### A revocation reads the document to explain a refusal, not to skip the POST
+
+Freewallet's connected-apps revocation (deac604, 2026-09-10) skipped the
+revocation POST for any grant its verified account document read as dead:
+an orphaned signer, a struck parent delegation, a swapped-out generation.
+The same day, wallet-core e0cee42 moved the generation delegation's
+revocation the other way: the document a login read is a snapshot, a ladder
+VM struck by one ceremony can stand again on the server by the time the
+revocation runs, and a client clock ahead of the server's reads a live
+delegation as dead. So the only local skip is a delegation expired beyond a
+ten-minute skew margin; everything else is POSTed, and the document is read
+afterward to classify a plain `ValidationError` (expired, orphaned,
+signer-gone, generation-swapped) or to rethrow one the client cannot
+explain. Moving freewallet's predicate into wallet-core (WC-227) surfaced
+the split, and the move took the POST-then-classify policy so both wallets
+hold one.
+
+The rule: a revocation POST is the only proof a grant is off the account.
+Read the verified document to explain the server's refusal, and skip the
+POST only for a grant no server within the skew margin still honors. Keep
+that policy in wallet-core, so a wallet cannot drift to its own.
+
+### A canonical-URL change reaches the test fixtures before it reaches the code
+
+WAS v0.5 made the trailing-slash form of a container URL canonical
+(was-client 0.61.0), and freewallet's FW-523 sweep onto it (2026-09-13)
+touched four source files the roadmap item had named. It also touched
+fourteen test files the item had not. A zcap `invocationTarget` is asserted
+on all over a suite: unit fixtures carry stored management capabilities that
+a target comparison now reads as stale, e2e specs assert
+`invocationTarget.endsWith('/collection')`, join a resource URL onto a grant
+target with a literal slash, and intercept requests with a Playwright route
+pattern (`**/space/*`) whose `*` does not match across the new trailing
+slash. Each failure reads as a product defect until the fixture is looked
+at.
+
+A second trap sits in the inverse direction. Deriving a server base URL back
+out of a Space URL with was-client's `parseSpacePath` drops a sub-path
+deployment: the parser sees the deployment's own base path (`/was/`) as a
+first path segment and refuses the whole URL, so every grant built from it
+goes unsatisfiable on exactly the deployments a bare-origin test suite never
+exercises. Split at the `/space/` boundary and hand the prefix back as the
+server URL, or use `parseSpaceTarget`, which takes the server URL and does
+this itself.
+
+The rule: when a wire-level URL form moves, grep the test tree for the old
+form before running anything -- suffix assertions, string joins, and route
+glob patterns all encode it -- and treat a sub-path deployment as a case the
+suite cannot see, so re-derived base URLs need their own check.
+
+### A server answers every URL under its mount, and none it does not own
+
+Filed 2026-09-14 from freewallet's first signup against a WAS v0.5
+freewallet.cloud. The spec's decision 0006 finds the service description
+through a `Link: rel="service"` header on every response the server sends,
+404s included, so a client may start from any URL it holds. was-client
+started from the one URL it held, the configured base, and the origin root
+there was a static nginx landing page: no `Link`, no CORS headers, and the
+whole signup blocked on the first cross-origin `HEAD`. Every other path on
+that host, `/does-not-exist` included, answered from the app with both
+headers.
+
+The guarantee is about responses the server sends, and nothing makes the
+server the thing that answers its base URL. On a sub-path mount the app owns
+its base and the probe works, which is why no test suite saw it. A base URL
+at the origin root is the one case where "the server's URL" and "a URL the
+server owns" come apart.
+
+The rule: discover from a URL the server itself must answer, never from the
+bare base. The wallets take the Spaces Repository URL as their configured
+server address, derive the base as its parent, discover once from the
+Spaces URL, and hand the description to every client they build through
+was-client's `serviceDescription` option. A client that is left to discover
+on its own re-derives the base-URL assumption.
+
+### A spec anchor named in an export manifest is permanent wire text
+
+Filed 2026-09-15 from the freewallet backup-bundle design (FW-530). The
+Space export archive follows the FEP-6fcd manifest pattern, where every
+entry in `contents` carries a `url` pointing at the documentation of
+that entry's format. The server fills those in with WAS spec section
+URLs (`#spaces`, `#collection-data-model`, `#resource-data-model`,
+`#policy`, `#resource-metadata-data-model`), and the wallet bundle
+layered over it points at the profile spec's own anchors. Every
+archive ever exported carries those strings, and nothing rewrites an
+archive on disk. A heading reword that moves an anchor breaks every
+existing archive's self-description, silently, since a dangling
+fragment still fetches the page.
+
+The fragile part is that a spec editor sees a heading, not a wire
+value. ReSpec derives an id from the heading text unless the heading
+pins one, so the default is that a reword moves the anchor.
+
+The rule: any spec whose section URLs are written into stored artifacts
+(a manifest, a descriptor, a `url` member) pins the id on each such
+heading explicitly, the way the WAS spec's `{#authorization}` style
+does, and says in one place which of its anchors are depended on this
+way. A new artifact format that names spec anchors adds its anchors to
+that list in the same change. Name the anchor after the concept, not
+the heading wording, so the heading stays free to change.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

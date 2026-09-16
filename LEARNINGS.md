@@ -924,6 +924,78 @@ way. A new artifact format that names spec anchors adds its anchors to
 that list in the same change. Name the anchor after the concept, not
 the heading wording, so the heading stays free to change.
 
+### A was-client bump past 0.62.0 drags the teaching server with it
+
+Filed 2026-09-16 from was-sync WS-14. was-client 0.62.0 made service
+discovery mandatory: every signed request first reads the `rel="service"`
+link off an unsigned `HEAD` of the server URL, and a server that carries
+none is refused with `IncompatibleServerError` before anything is signed.
+was-sync's integration suite pinned `was-teaching-server@^0.29.0`, which
+predates WAS v0.5, so the moment its was-client devDependency moved off
+0.60.0 all fourteen integration tests failed at client construction, with
+an error naming the server rather than the change that caused it.
+
+Any repo whose tests run against an in-process was-teaching-server is
+really pinning a pair, not two independent versions. Raising the
+was-client devDependency across 0.62.0 raises the server floor to 0.30.0
+at the same time, in the same change. The symptom to recognize:
+integration tests failing wholesale with `IncompatibleServerError` right
+after a client bump, while every unit test stays green -- the unit
+suites drive fake ports and never discover a service.
+
+### A refusal raised before the request is permanent, and a retry loop starves on it
+
+Filed 2026-09-16 from was-sync WS-15. The example that taught it is now
+historical: was-client 0.66.0 added a fail-closed affordance gate that threw
+`NotSupportedError` before any request when a write named `ifMatch` /
+`ifNoneMatch` against a collection whose backend advertised no
+`conditional-writes`. Nothing about a second attempt changed the backend's
+feature list, so every consumer that wrapped WAS writes in a retry-with-backoff
+loop had a hole: the batch was re-sent forever and every row behind it was
+starved, while the logs showed a generic write failure on repeat. That gate is
+being removed under was-client WCL-106 and was-sync WS-16, since conditional
+writes became a baseline requirement (see the entry below), and wallet-core
+WC-237 was withdrawn 2026-09-16 as obsolete.
+
+Two rules survive, for any client error raised ahead of the request rather
+than mapped from a response. First, a retrying consumer needs a give-up branch
+for it, and the branch belongs wherever the retry handle lives -- not in the
+write path, which usually holds no handle to stop. In was-sync the push handler
+only classified and logged the refusal; the controller found the name under
+RxDB's error wrapping and released that one collection, leaving its siblings
+replicating. Second, the classification goes in the owning package's predicate
+set (an `isXError` on the relevant subpath) rather than as a name string
+hard-coded in each consumer, so the WC-64 rule stays one contract with one
+owner.
+
+The symptom to recognize: a push or write cycle that never advances against one
+collection while the rest of the Space syncs. It is invisible in a test setup
+where every collection carries the affordance, so no integration suite will
+surface it on its own.
+
+### A guarantee a client must build around cannot be an optional affordance
+
+Decided 2026-09-16 (WAS decision 0007, driven by the removal of the Backend
+`features` vocabulary). Layering works when the layer is something a server
+does or does not serve: listing, a query profile, a change feed. A client that
+finds it absent does without it. Layering fails when the layer is a guarantee
+the client builds correctness on, such as compare-and-swap, or a stored stamp
+whose absence surfaces late as undecryptable rows. The client cannot
+substitute a missing guarantee; it can only fall back by silently weakening
+what it promised the user. In was-client that fallback cost roughly 525 source
+and 730 test lines, including an insert with two implementations and a
+metadata patch that dropped its pin, plus a give-up path in every retrying
+consumer downstream.
+
+The placement test for any token: could a server honestly support it on one
+storage engine and not another? Because the client never addresses an engine
+directly, the server is a serializing point that sees every write, so it can
+mint its own validator, keep its own change log, or maintain its own index
+over any engine. Nothing varies per backend. A token therefore lives
+server-wide in the service description, or under the version entry of the
+companion spec whose optional affordance it names, and a Backend description
+is identity, operator, and persistence only.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

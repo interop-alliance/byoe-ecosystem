@@ -613,6 +613,26 @@ and only `resolve.dedupe` in vite keeps the browser bundle single-copy.
 None of this is visible off the registry, which is one more reason the
 train's last step is to publish, drop every link, and re-run the suite.
 
+### A `link:`ed package serves its dist, so an unbuilt sibling reads as a consumer bug
+
+A pnpm `link:../pkg` reference resolves through the linked package's export
+map to its `dist`, not its `src`. So a sibling whose source has been adapted
+but not rebuilt serves the OLD module, and the consumer's failure names the
+consumer. Adapting freewallet to was-client 0.66/0.67 (2026-09-16), the
+suite reported `No "recordEnvelopeId" export is defined on the
+"@interop/wallet-core/keyring" mock` across 133 tests: the export existed in
+wallet-core's `src`, the helper was the right fix, and every test mock
+already spread `importOriginal()`. One `pnpm build` in the sibling turned
+133 failures into 4. The same staleness hides the reverse way, since `tsc`
+in the consumer reads the stale `.d.ts` too and reports a clean typecheck
+over calls the rebuilt package refuses.
+
+The rule: when a consumer holds a `link:` and its tests name a missing
+export, a mock that "forgot" a member, or a signature the sibling's source
+clearly has, build the sibling before reading the failure as yours. Re-run
+the consumer's typecheck after that build, since the first run's silence
+was measured against the old declarations.
+
 ### A fake WAS server is a second implementation of the contract
 
 A hand-written in-memory WAS fake ("accepts every write, serves a plausible
@@ -995,6 +1015,59 @@ over any engine. Nothing varies per backend. A token therefore lives
 server-wide in the service description, or under the version entry of the
 companion spec whose optional affordance it names, and a Backend description
 is identity, operator, and persistence only.
+
+### A partial upstream removal still retires a downstream path, but only if you check which half went
+
+Learned 2026-09-17 (was-sync WS-16, retiring the give-up path WS-15 added). The
+item was filed on the premise that was-client's WCL-106 would remove the
+`NotSupportedError` refusal and its `/sync` predicate outright, so the driver's
+classification of it was dead code. WCL-106 removed only half: the `no-feature`
+reason went with the backend-feature vocabulary, the `no-validator` reason
+stayed (a guarded write pinned to a read that returned no `ETag`, which CORS can
+hide from a browser client), and `isNotSupportedError` is still exported. Read
+at the level of "does the error still exist", the premise was wrong and the
+deletion would have reintroduced an infinite retry.
+
+It was right at the level that matters, which is the call path. The surviving
+raise sites are the log store, the governed descriptor store, and the internal
+compare-and-swap helper; the sync port passes `ifMatch` / `ifNoneMatch` straight
+into its headers with no gate, and `createWasSyncPort` bypasses the codec, so no
+write or read the driver makes can raise the refusal any more. A downstream item
+that names an upstream removal as its trigger is checking a reachability
+question, not an existence one: grep the upstream raise sites and ask which of
+them your own seam can reach. The upstream CHANGELOG is the place this shows
+up -- WCL-106's entry says in as many words which reason stayed and why.
+
+### A filter over imported text is not a discriminator for imported rows
+
+Learned 2026-09-17 (freewallet's content-migration design, the scoped
+re-review after its decision walk). The design first carried every old
+`wallet-activity` row into the new account verbatim and had the readers
+that act on a row's embedded grant ignore any grant whose
+`invocationTarget` was not under the new Space. It read as sound: the new
+Space id is random, so no archived grant could name it. Three lenses broke
+it the same day. One row type (an agent `Revoke`) carries no target at
+all, and a reader uses it to hide a live grant. Two readers of the same
+rows were not on the list. And the filter's input was the bundle's own
+text, so an author who knows the new Space id (every share link carries
+it) writes a grant that passes by construction.
+
+The general shape: a row that a reader acts on, rather than displays,
+needs a discriminator that does not come from the row. Provenance the
+wallet verified, a marker the importer stamps, or not importing the row.
+A check on a member the importer copied is a robustness check against
+accident and cross-account carry-over, never a security bound, and
+saying "the id is random" about the target only restates the accident
+case. The design settled on importing the content rows (credential
+activities) alone and filing the rest for when provenance verifies. The
+target check survived as a hardening item on its own, since the same
+readers trust unsigned rows from any enrolled client today.
+
+The process lesson beside it: a walk-through that decides nine open
+questions in one sitting produces new mechanism, and the review that
+approved the doc never saw that mechanism. A scoped re-review over the
+deltas, with the lenses the deltas touch, cost three subagents and found
+the defect before the status flip.
 
 ## Current follow-ups
 

@@ -1069,6 +1069,71 @@ approved the doc never saw that mechanism. A scoped re-review over the
 deltas, with the lenses the deltas touch, cost three subagents and found
 the defect before the status flip.
 
+### A "decided" block on a question marked "not traced in source" is not a decision
+
+Learned 2026-09-23 (freewallet's restore-ceremony design, FW-531, the
+review pass after its 27-question walk). The walk closed a question that
+asked whether the transient login's promotion arm would fire at a
+particular tear, and the question's own text said "observation, not
+traced in source". The decision recorded "it fires, and it is the
+intended convergence of the pivot", and three later decisions (no gap
+row for the pre-pivot tears; the stage 6 detector's skip rule; the
+re-run rule) were built on it. The review pass traced it: the login
+runs its annex readiness stage before the promotion arm, the readiness
+stage fails on the annex that does not exist yet at that tear, and each
+attempt strands a Space. Four of six lenses found the same defect
+independently, which is the signature of a load-bearing claim nobody
+checked.
+
+The rule: a walk may not close a question that names itself as
+untraced. Either the walk traces it (the stage order of the login it
+relies on, read in source, in the order the code runs it) or the
+decision block says "assumed, trace before approval" and the review pass
+starts there. A convergence claim about a login-routing mender is the
+sharpest case, since the menders run in a fixed order and an arm that
+exists is not an arm that is reached.
+
+The companion lesson from the same pass: a design's citations of a
+sibling repo age in days, not months. The server had withdrawn the very
+authorization shape the design decided (its own decision record, dated
+five days before the review) and shipped the other half, and storage-core
+had shipped the stats member the design listed as pending. The
+`touches:` walk at review time must re-read the sibling repos' decision
+records and CHANGELOGs since the design's read date, not only its code.
+
+### A standing credential nobody can log in with must be recorded before it is published
+
+**Filed:** 2026-09-25, from freewallet's backup export (FW-554), which
+replaced the recovery code a bundle packed with a standing unlock
+credential whose secret is 32 random bytes that exist only in memory
+until the bundle file is written.
+
+The passkey registration writes a bare registry entry first and
+completes it after the establishment, and a torn run is mended by that
+passkey's own next login, which rebuilds the bare row from the record.
+That mender depends on a login the credential can run. A backup
+credential has none until a restore runs it, and a crash mid-export
+loses the secret for good, so a bare row would be a residue nothing
+converges: a live ladder VM and a roster wrap Settings lists but cannot
+strike, which also blocks the last-client transition.
+
+The rule: when a standing credential's only login is a ceremony that
+does not exist yet, or one the user may never run, its registry entry
+is written first with everything a secret-free removal needs (the
+unlock Space id, the roster kid, the key-agreement multibase, rung 0's
+update key, the client DID, and a pre-minted management zcap), so a row
+left by any later tear is removable from Settings through the ordinary
+revoke. The strike tolerates a verification method the document never
+listed and the Space delete tolerates a 404, so the row is removable
+whichever stage the run tore at. The same shape applies to any wallet
+that packs a standing credential into a file.
+
+The companion rule: a commit the restore depends on (the annex rung
+commit) runs blocking and before the document entry when the caller
+requires it, so its failure leaves only inert writes and refuses the
+export, rather than shipping a bundle whose first login mints a fresh
+generation and loses every restored grant.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

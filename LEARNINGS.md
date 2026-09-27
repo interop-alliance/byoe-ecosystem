@@ -1134,6 +1134,56 @@ requires it, so its failure leaves only inert writes and refuses the
 export, rather than shipping a bundle whose first login mints a fresh
 generation and loses every restored grant.
 
+### A roadmap section named after the review that filed it says nothing about what to do next
+
+**Filed:** 2026-09-26, from freewallet's roadmap reorganization (218
+open items across 36 sections, 25 of them named after a review pass or
+a date).
+
+A roadmap that files each review's findings under a section named for
+that review ends up sorted by provenance. The section name then answers
+"where did this come from" and nothing else: not how bad the item is if
+it stays open, not which session kind it affects, not what it waits on.
+The `priority` field does not rescue it once nearly half the items are
+`medium`. And the file is browsed through a heading outline, so
+anything not in a heading is invisible while choosing.
+
+The reorganization that fixed it, in four parts:
+
+- Sections are consequence classes, ordered by severity: lockout and
+  unrecoverable residue, feature, security bound weakened, data loss or
+  corruption, correctness, performance, UX and copy, docs and tests and
+  cleanup, spec and protocol proposals, parking. The class is the kind
+  of work; `priority` still sorts inside it. Provenance moves into
+  `discovered-from`, which was already on most items.
+- The session kind sits in the item heading as a bracket (`[T]`
+  transient or credential-anchored, `[R]` remembered, `[P]` popup, `[G]`
+  guest, `[*]` every kind), so the outline shows it.
+- Dependency is derived, not hand-sorted. A script run after every
+  roadmap edit sorts each section so a `depends-on` target precedes its
+  dependents, writes the reverse `blocks:` field, rewrites the computed
+  heading markers `[blocks N]` and `[after FW-X]`, and regenerates an
+  index block under the H1 listing, per class, the items nothing open
+  blocks and each foundation item with its dependents. It treats an
+  archived target as satisfied and reports the lines that name one, so
+  stale `depends-on` prose surfaces instead of rotting. It never moves
+  an item between sections; the class is a judgment call.
+- Ceremony items carry `invariant:`, the mender-registry id they make
+  true, so the class sections can be read against the invariant table.
+
+Two things the pass showed. Sub-issue nesting at a deeper heading level
+was considered and rejected: `depends-on` is a graph, and a heading can
+show one edge. Markdown cannot indent a heading either (four leading
+spaces make a code block), so the relation lives in fields and computed
+markers, with items kept at one level. And a retired section's intro
+prose is either history or a decision; it goes to the archive file's
+notes section or into the one item it was really the context for, never
+into a "notes" section of the open roadmap.
+
+The convention is freewallet's as of this date; the script is a
+dependency-free Node file kept beside the roadmap and is portable to any
+repo using the shared item schema.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;

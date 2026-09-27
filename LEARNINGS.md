@@ -633,6 +633,20 @@ clearly has, build the sibling before reading the failure as yours. Re-run
 the consumer's typecheck after that build, since the first run's silence
 was measured against the old declarations.
 
+A rebuild is not always enough. When another dependency lists the linked
+package as a peer, pnpm resolves the `link:` specifier as an injected
+`file:` copy under `node_modules/.pnpm/`, and the copy is taken at install
+time, so the consumer keeps the old dist after the sibling rebuilds. The
+lockfile shows it: the specifier reads `link:../pkg` while the resolved
+version reads `file:../pkg(...)`. Found on 2026-09-27 in freewallet, where
+wallet-backup's peer on wallet-core made the copy, and a new
+`./clientAnnex` export read as "not a function" after a clean wallet-core
+build. A plain `pnpm install --frozen-lockfile` does not refresh the copy,
+because pnpm 11 answers "Already up to date" off
+`node_modules/.pnpm-workspace-state-v1.json`. Move that file aside, then run
+`pnpm install --frozen-lockfile`. It relinks from the store and leaves the
+lockfile unchanged.
+
 ### A fake WAS server is a second implementation of the contract
 
 A hand-written in-memory WAS fake ("accepts every write, serves a plausible

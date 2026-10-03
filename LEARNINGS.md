@@ -657,11 +657,24 @@ real server answers `204`, never assigned `createdBy`, and raised the error
 shapes of a `mapAuthErrors: true` port while the main consumer runs the
 default port. Four of the ten findings from that day's review were cases
 the fake modeled wrongly, and the integration suite passed on all of them.
-was-teaching-server exports an in-process `createApp` (filesystem backend
-into a `mkdtemp` directory, `listen({ port: 0 })`, then set
-`app.serverUrl` to the assigned port), so a driver or client suite runs
-against the real server through the real `createWasSyncPort` for the cost
-of one devDependency. Two things the real server teaches that a fake does
+was-teaching-server exports the in-process boot as
+`was-teaching-server/testing` (from 0.40.0), so a driver or client suite
+runs against the real server through the real `createWasSyncPort` for the
+cost of one devDependency. `openTempBackend()` opens a filesystem backend
+on a fresh temp dir, and `startTestServer({ backend })` listens on an
+OS-assigned port and returns the `http://localhost:<port>` `serverUrl`. Do
+not copy the recipe by hand: a copy that uses `127.0.0.1` fails in the KMS
+facet only, and `new FileSystemBackend(...)` no longer works, since
+backends come only from the async `open()` factory. Three things to know
+about the export. The server owns the injected backend, so
+`fastify.close()` removes the temp dir. A test that restarts a server over
+the same data makes its own `mkdtemp` dir, opens it with
+`FileSystemBackend.open({ dataDir })` for each boot, and pins the second
+boot to the first one's `port`. `provisionWebvhIdentity` takes an `owner`
+of `{ did, was }`, where `was` is a `WasClient` the consumer builds from
+its own `@interop/was-client` dependency. And it publishes the log into a
+Collection it leaves capability-gated, so a test that needs the log
+readable without a capability sets the Collection public itself. Two things the real server teaches that a fake does
 not: a plaintext collection's `custom` is `{ name, tags }` with `tags` a
 string-to-string record (anything else is `400`), and the replication
 collection needs the package's LWW conflict handler installed explicitly,
@@ -878,6 +891,23 @@ The rule: a revocation POST is the only proof a grant is off the account.
 Read the verified document to explain the server's refusal, and skip the
 POST only for a grant no server within the skew margin still honors. Keep
 that policy in wallet-core, so a wallet cannot drift to its own.
+
+Addendum, 2026-09-30 (FW-565). The refusal's name is the server's to
+change. was-teaching-server 8e746f6 (2026-09-18) began holding the revoke
+route's chain-validation 400 until the invocation verifies, and a chain
+that no longer verifies leaves the revocation URL's root with no
+controller. was-client invokes that root, so a dead grant's revocation is
+now denied with the masked 404 `NotFoundError`, and the `ValidationError`
+reading above stopped firing: every orphaned app became unrevokable. The
+server cannot record a dead chain as revoked under any invoker, and the
+chain fails before the revocation inspector runs, so the grant is already
+inert there. wallet-core now admits a plain `NotFoundError` to the same
+document reading. The general point: a refusal reading keyed on an error
+name is a wire contract with the server, and a server change that
+reshapes its denials (masking, reordering checks) must walk that reading
+in wallet-core. The document classification is what keeps the wider
+match safe, since a 404 on a grant the document reads as live still
+rethrows.
 
 ### A canonical-URL change reaches the test fixtures before it reaches the code
 
@@ -1198,7 +1228,131 @@ The convention is freewallet's as of this date; the script is a
 dependency-free Node file kept beside the roadmap and is portable to any
 repo using the shared item schema.
 
+### A design over a shared module reads the owning repo's working tree, not HEAD
+
+A design in one repo that changes a shared `@interop/*` module can be
+written against the published or committed code while uncommitted work
+in the owning repo changes the same seam. FW-320's resolve-on-read
+design proposed a new mender trigger, `encounter`, with a conditional
+reach rule. Meanwhile wallet-core's uncommitted 0.84.0 work had already
+added a `read-path` trigger with an unconditional rule, plus a new
+invariant id that breaks freewallet's census test on the next bump. The
+design review caught it on 2026-09-28. Every citation had been checked
+against HEAD, so nothing looked wrong.
+
+The rule: when a design touches a shared module, run `git status` and
+`git diff` in the owning checkout for that module's paths, and read its
+roadmap's in-progress items, before settling names or rules. A collision
+is a question for the owner, recorded in the design, before either side
+publishes.
+
+### Before signing a host-held record, say what the adversary does instead
+
+Learned 2026-10-01 (freewallet FW-620, recorded in freewallet's
+`decisions/0038-no-authorship-guard-on-connections-entries.md`). The
+`connections` directory's entries are encrypted but unsigned, so the host
+can write one at any id it has observed. Signing each entry looked like the
+obvious guard, since the unlock-methods registry record is signed the same
+way.
+
+The directory's reader rules had already shrunk a plant to one shape: a
+party's own genuine capabilities, back at that party's own id. The host
+holds those capabilities, since every invocation carries one in full.
+Serving an older version of the same Resource does exactly the same thing.
+So a plant and a rollback are one move. A signature stops only the plant,
+which was never the cheaper attack, and the rolled-back body carries the
+wallet's own valid signature.
+
+The registry's signature was worth its cost because the registry's reader
+checks could not otherwise bound who wrote a record. The directory's could.
+The rule: before adding a signature to a host-held record, state what the
+host does instead once the signature is in place. If that is a rollback
+with the same effect, the reader rules are the guard, and the signature is
+a new wire layout plus a re-sign at every key rotation for no change in
+the bound.
+
 ## Current follow-ups
 
 - Seed further entries from the older per-repo lessons as they resurface;
   this file was created 2026-08-15.
+
+### A CORS proxy on a verification fetch makes the proxy a trust root
+
+Browser wallets resolve DIDs, look up issuer registries, and fetch
+contexts, schemas, status lists, and render templates themselves. Many
+hosts of those documents send no CORS headers, because their authors
+assumed a server backend would fetch them. The usual workaround is a CORS
+proxy, which the WAS teaching server offers at `/api/cors`. Routing a
+verification input through a proxy lets the proxy operator answer for the
+issuer. It can serve a did:web document with its own key, and a forged
+credential then verifies. Where the proxy is the WAS host, this makes a
+party every other mechanism treats as adversarial into a verification
+trust root. This came out of a review of freewallet's verification CORS
+fallback on 2026-09-28.
+
+The rule: before proxying a fetch, classify what it returns by whether
+its integrity holds regardless of route. A did:webvh log is
+self-certifying. A status list credential and an OIDF entity statement
+are signed by a key resolved separately. A `relatedResource` with a
+digest is pinned, and a bundled context is never fetched. Those are safe
+through any proxy. A did:web document, an unsigned registry file, and an
+undigested context are not. They need a trusted proxy that the deployment
+decides on, or a verification result that says the proxy was relied on.
+The lasting fix is in the specs: public, unauthenticated verification
+documents should be served with `Access-Control-Allow-Origin: *`. A
+remembered fallback also needs an expiry and a path back to direct.
+Otherwise one network blip routes an origin through the proxy for the
+rest of the session.
+
+### An opaque string checkpoint must travel wrapped through RxDB
+
+RxDB merges replication checkpoints with `stackCheckpoints`, which is
+`Object.assign({}, ...checkpoints)`, on every pulled page and again when it
+persists the replication meta. Applied to a string it yields an index-keyed
+object (`{"0":"o","1":"p",...}`), so a pull handler that returns the server's
+opaque checkpoint as a bare string gets that object back on the next pull,
+the server refuses it, and the feed restarts on every cycle (or loops, when
+the first page fills the batch). The integration suite did not catch this on
+2026-10-01 because the registry teaching server still echoed an object
+checkpoint, which `Object.assign` passes through; the string path was only
+driven through fake ports with no RxDB.
+
+The rule: a driver hands RxDB a checkpoint record (`{ checkpoint: string }`
+in was-sync), never the string, and any test of a scalar checkpoint contract
+drives the real `replicateRxCollection` over more than one page and asserts
+the exact value the port receives back. A persisted record without the
+expected member reads as the start of the feed rather than being sent.
+
+### RxDB's push-handler conflict array is not a vehicle for server-modified state
+
+In RxDB 17.5.0 a row the push handler returns as a conflict entry is
+excluded from the ordinary replication-meta write
+(`replication-protocol/upstream.js:292`). Its meta is written only after a
+conflict fork write. That write uses the pre-push fork state as `previous`
+(`:338`), ignores a 409 (`:358`), and records meta only for rows the fork
+write succeeded on (`:372-378`). A local edit or delete made during the push
+HTTP therefore leaves no durable record that the write was pushed. A delete
+after such a lost record is skipped by was-sync's "never pushed" rule, and
+the server copy stays live. The `isResolvedConflict` mark also survives
+later meta writes, so every pull of that row waits on the upstream.
+
+Returning an accepted write's acked state (validators, `updatedAt`,
+`createdBy`) as a conflict entry looked like the RxDB-native way to record
+server-assigned members. The was-sync design review for the ack write-back
+rejected it on 2026-10-02 for the reasons above.
+
+The rule: a conflict entry means the server refused the write. Server-assigned
+members reach the local row through the push-ack write-back
+(`onWriteAccepted` plus `incrementalPatch`), which leaves RxDB's pushed-state
+meta write intact. The echo that RxDB drops during the push window is
+harmless once the ack carries those members.
+
+### The pull-after-push window starts at the server commit
+
+RxDB drops a pulled state for any row whose local state has no settled
+assumed primary. That holds from the moment the server commits a push until
+the upstream writes the meta. A "pull right after push" window thus starts
+at the server commit and not at any client-side write-back. Nothing on the
+ack path can cover a push's own HTTP latency. Code and tests that rely on an
+echo arriving after a push must either await the push first or carry the
+needed members on the ack. This came out of the same 2026-10-02 review.

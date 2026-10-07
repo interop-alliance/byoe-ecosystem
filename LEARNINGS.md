@@ -1060,6 +1060,30 @@ server-wide in the service description, or under the version entry of the
 companion spec whose optional affordance it names, and a Backend description
 is identity, operator, and persistence only.
 
+### An optional member a feature depends on is refused at consent, through a token
+
+Decided 2026-10-06 (freewallet FW-478, the agent connection's inbox). The
+WAS spec records `createdBy` on a Resource as OPTIONAL, and the wallet's
+inbox drain attributes every message by it: a message with none is refused
+and deleted. On a server that does not record the member, the feature does
+not fail at the drain. It fails at consent, before any grant, so the owner
+never approves a channel that cannot form. The wallet learns the promise
+from a `created-by` token in the core profile's `features`, which a server
+advertises when it records the member on every Resource, Collection, and
+Space created under a capability invocation.
+
+The lesson is where the line sits between "a guarantee a client builds
+correctness on" (the entry above, baseline, no token) and "an affordance a
+client does without" (a token). Attribution is neither: a client cannot
+substitute it, but the feature that needs it is one feature, and every
+other use of the server stands without it. That shape takes a token checked
+at the one entry point that starts the feature, and a clean refusal there.
+The token is a staging step. It is a candidate for promotion to a baseline
+requirement at a later breaking version, once a second feature needs
+attribution. Promotion is cheap later; demotion is not. Weighed against it:
+every token is a conformance fork clients must handle, and a MUST would cost
+only a server with no per-Resource metadata at all.
+
 ### A partial upstream removal still retires a downstream path, but only if you check which half went
 
 Learned 2026-09-17 (was-sync WS-16, retiring the give-up path WS-15 added). The
@@ -1246,6 +1270,15 @@ roadmap's in-progress items, before settling names or rules. A collision
 is a question for the owner, recorded in the design, before either side
 publishes.
 
+It recurred on 2026-10-03. The WS-23 design in was-sync described was-client
+and storage-core as still carrying `version` / `metaVersion`, from a research
+pass that read released versions and committed history. was-client's working
+tree held an uncommitted `0.87.0 - TBD` CHANGELOG entry with the stamp model
+and an etag-only ack, and storage-core 0.28.0 had shipped that morning. The
+review pass caught it. A `TBD`-dated top CHANGELOG entry in a sibling checkout
+is the cheapest signal that the working tree is ahead of the registry; read it
+before describing the sibling's state.
+
 ### Before signing a host-held record, say what the adversary does instead
 
 Learned 2026-10-01 (freewallet FW-620, recorded in freewallet's
@@ -1356,3 +1389,53 @@ at the server commit and not at any client-side write-back. Nothing on the
 ack path can cover a push's own HTTP latency. Code and tests that rely on an
 echo arriving after a push must either await the push first or carry the
 needed members on the ack. This came out of the same 2026-10-02 review.
+
+Refinement from implementing the fix (2026-10-04): RxDB's downstream admits a
+nudged pull (`reSync()`, and every master-stream event) only once the running
+push has finished (`downstream.js` awaits `active.up` false before queuing the
+task). A pull cannot start during a push's HTTP round trip, so the window a test
+can reach is the one the ack write-back opens: the pull is admitted the moment
+the push that ran the write-back returns, and lands while the no-op push that
+records the patched row as the assumed primary is in flight. Forcing it
+deterministically means giving that second push a real write to hold: edit the
+row during the first push. Holding the first write's response and nudging a
+pull never pulls.
+
+### A pull handler that filters a page must not hand RxDB an empty one
+
+RxDB's downstream loop breaks on a pulled page whose `documents` array is
+empty before it persists that page's checkpoint, and stops early on an
+under-full page. A pull handler that drops documents client-side (a `kind`
+filter over a widened feed, say) and returns the server's next checkpoint with
+zero surviving documents therefore re-fetches the same page on every poll, and
+every row behind it never replicates. Found in the WS-23 design review for
+was-sync on 2026-10-03, against the WS-24 feed filter. The rule: a filtering
+pull handler keeps following the server checkpoint internally until the page
+it hands RxDB holds at least one document or the feed ends, and a unit case
+drives it with an all-filtered page followed by a real one.
+
+### An unread response body holds the in-process test server open
+
+A test that calls `WasClient.request` directly and does not read the response
+body leaves that connection busy. `fastify.close()` on the in-process
+`was-teaching-server` then waits on it, and the suite's `afterAll` hook runs
+into its timeout. Found on 2026-10-03 while wallet-core's integration tier was
+built on `was-teaching-server/testing`. The rule: a test fixture that issues a
+raw request reads or cancels every response body, the refused ones included,
+before the server is closed.
+
+### A gap caused by a header a server may hide is a CORS requirement question first
+
+Learned 2026-10-04 (was-sync WS-21). A dropped feed echo on a deployment that
+hides `ETag` from a cross-origin caller left the row without a validator, so its
+next content edit went out unconditional. The candidate fixes were client-side:
+validator members in the write body, or an extra re-read. The cause was upstream
+of both. The WAS spec's CORS requirements (spec.md, around line 1001) required
+only `Link` in `Access-Control-Expose-Headers`, so the validator that the whole
+conditional-write design rests on was optional cross-origin. The reference
+server already exposes `ETag` (was-teaching-server `src/plugin.ts:511`). The
+rule: when a client-side correctness gap traces to a header a conforming server
+may legitimately hide, check whether the spec's CORS requirements are the fix
+before adding body members or client-side re-reads. The spec is to require `ETag`
+(and `Location`) exposed, and the driver keeps its hidden-`ETag` handling as a
+best-effort path for non-conforming servers.

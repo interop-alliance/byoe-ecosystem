@@ -1439,3 +1439,105 @@ may legitimately hide, check whether the spec's CORS requirements are the fix
 before adding body members or client-side re-reads. The spec is to require `ETag`
 (and `Location`) exposed, and the driver keeps its hidden-`ETag` handling as a
 best-effort path for non-conforming servers.
+
+### A minting convention is not a reading rule
+
+Learned 2026-10-08 (vh-resource-log VRL-31, wallet-core WC-287). This stack
+mints every verification-method id as `${did}#${publicKeyMultibase}`, and for
+a while the readers leaned on that: the resource-log verifier took a proof's
+key from its DID URL fragment, and the shared document reader refused a member
+whose fragment and `publicKeyMultibase` disagreed. DID Core says the fragment
+is an opaque selector and the method's `publicKeyMultibase` is the key, so a
+document that is valid by DID Core was read two ways across the stack. The
+rule: a convention about how ids are minted may be relied on by the writer
+that mints them and by did:key, where the fragment is the key by that method's
+spec. A reader of a controller document dereferences the id to the method and
+takes the key the method publishes, and never reads the fragment as the key.
+When a verifier needs a dereference it does not have (here, the controller
+port offered key sets, not documents), change the port to hand over the
+document at a version and read it through the shared readers, rather than
+keeping the shortcut.
+
+### A placeholder substitution is a substring rule, and the inverse must match it
+
+Learned 2026-10-11 (vh-resource-log VRL-25). The resource-log verifier
+recomputed a genesis SCID with a local helper that reverted only strings
+wholly equal to the SCID to `{SCID}`. The profile's construction (and
+did:webvh's) replaces every `{SCID}` placeholder, inside longer values too,
+and the kernel's resolver recomputes with the same substring `replaceAll`.
+So the local "inverse" was narrower than the construction it inverted, and a
+spec-built genesis whose state embedded the SCID in a longer string would
+have been refused as a forgery. The rule: a verifier's inverse of a
+construction is the construction's own helper run backwards, taken from the
+package that owns the construction. If the helper is not exported, export it
+upstream (here `replaceValueInObject` from `@interop/did-method-webvh` 5.14.0)
+rather than writing a local one, because a local copy drifts in exactly the
+semantics the hash commits to.
+
+### Chromium's `Response`-based stream drain loses the stream's own error
+
+Learned 2026-10-12 (was-client 0.97.1). A chunked encrypted read is a
+`ReadableStream` that errors with a typed `NotFoundError` or
+`EncryptionError` when a chunk is missing, mis-bound, or tampered with.
+was-client buffered it with `new Response(stream).arrayBuffer()`, and in
+Chromium that read rejects with a bare `TypeError: Failed to fetch`, so a
+caller matching on the error name never saw it. Node propagates the
+stream's error through `Response`, so every unit and integration test was
+green and only a real browser showed it. The rule: buffer a stream whose
+error is part of its contract with the stream's own reader (was-client's
+`streamToBlob`, in `src/internal/blob.ts`), and never through `Response`
+or `fetch` plumbing. The same applies to any consumer of
+`decodeStream()` / `getStream()` that buffers the result itself. A browser
+test (Playwright) is the only test that can guard this; a Node test
+cannot fail on it.
+
+### A key a swap must carry forward must be attributable from the log it supersedes
+
+Learned 2026-10-12 (freewallet FW-220, wallet-core WC-294, recorded in
+wallet-core's `decisions/0030-the-annex-rung-is-static-per-credential.md`).
+Each standing credential writes the client annex log with an update key
+derived from its own seed. The derivation also took the generation id, so
+every generation needed a fresh key per credential. A generation swap could
+commit only the keys its caller could derive, and a session holds only its
+own credential's seed. So every swap locked out every other credential, and
+nothing in the old log named their keys for the new generation. The fix was
+a static key per credential under its own HKDF label. The old log's current
+commitments are then the standing set, and a swap restates them in the new
+genesis. Retirement became an explicit exclusion the swap is handed, rather
+than a side effect of the swap. The rule: when a log is replaced by a party
+holding only its own secret, every key the replacement must keep has to be
+readable off the log it replaces. A key derived from the replacement's own
+identity cannot be carried forward by anyone but its holder.
+
+### A replica verifies against a copy of the log that only pulls can advance
+
+Learned 2026-10-26 (the freewallet design for registering a replica from
+every session kind). After a replica Space is promoted to the account's
+did:webvh, the replica server verifies every invocation on it against its
+own copy of the account log, and that copy advances only when a pull
+lands. A credential-anchored account's pull delegation is signed by a
+ladder verification method, and the source refuses the pull the moment
+that method is struck. So a passphrase change whose establishment entry
+and strike entry land inside one pull interval leaves a copy that never
+lists the new method: every later maintenance call by the new credential
+is refused, forever, and the retired method keeps its reach from the
+frozen copy. The rule: any ceremony that withdraws the signer of a grant
+a remote copy verifies has to replace that grant, and wait until the copy
+shows the replacement's signer, before the pivot. A ceremony with no
+pre-strike moment (the recovery spend) leaves a frozen copy and must say
+so. This is the same shape as the generation delegation's pre-pivot
+renewal, one hop further out.
+
+### The served `replicas` member lists only the registrations stored on that Space
+
+Learned 2026-10-26 (the same design, at its review). A registration is
+stored on the replica Space, and the Space Metadata object's `replicas`
+member is derived from the registrations stored on that Space alone. Under
+one-way pull the source Space stores none and serves `replicas: []`, and
+the apply path strips the member from every copy. So nothing the source
+serves tells one replica server about another, and a design that treats
+the member as a disclosure already made is wrong. A record of the replica
+set that travels with the account (the annex pointers) is a new disclosure
+and has to be accepted as one. The rule: before arguing that a disclosure
+is "already inside" an accepted one, read which party stores the record
+the accepted disclosure is derived from.

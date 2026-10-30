@@ -37,7 +37,7 @@ at the start of any cross-repo task.
   `CONTRIBUTING.md` is the shared core copied across repos; edit it there,
   never in downstream copies.
 - Contract consumers: the "Parties to this contract" tables in the AGENTS.md
-  of wallet-attached-storage-spec, app-connect-spec, and
+  of portable-web-spaces-spec, app-connect-spec, and
   encrypted-collections-spec. A normative change's checklist is a walk of
   the owning table.
 - Decision records: cross-repo decisions get a `decisions/NNNN-slug.md`
@@ -647,6 +647,21 @@ because pnpm 11 answers "Already up to date" off
 `pnpm install --frozen-lockfile`. It relinks from the store and leaves the
 lockfile unchanged.
 
+### An ESM-only dependency with no `default` condition is imported lazily
+
+Learned 2026-10-30 (the third package to hit it). canonicalize 3 is ESM-only
+and its exports map names only `import` and `types`, so a static import of it
+anywhere in a graph that tsx loads through its CJS path throws
+`ERR_PACKAGE_PATH_NOT_EXPORTED: No "exports" main defined`. The crash is
+reported at load, against the test file, so a whole suite stops running and
+the importer is several packages away from the test that fails. The app,
+jest, vitest and tsc all stay green, which is why it surfaces late. The rule:
+a library takes such a dependency with `await import(...)` inside an
+already-async caller, where Node's native resolver honors the `import`
+condition. `@interop/ed25519-signature`, `@interop/ecdsa-signature` and
+`@interop/edv-client` all do this for canonicalize; a new importer of it
+follows them.
+
 ### A fake WAS server is a second implementation of the contract
 
 A hand-written in-memory WAS fake ("accepts every write, serves a plausible
@@ -961,6 +976,34 @@ server address, derive the base as its parent, discover once from the
 Spaces URL, and hand the description to every client they build through
 was-client's `serviceDescription` option. A client that is left to discover
 on its own re-derives the base-URL assumption.
+
+### A Space URL is received, never assembled from a server root
+
+Filed 2026-10-27 from a dcw cleanup that found five `WasClient` sites
+appending `/spaces/` to a stored base URL, and the spec reading that
+followed. The Portable Web Spaces spec makes the service description the
+root of the URL graph: a server may be mounted under any path, the Spaces
+Repository is optional, and a client cannot derive the server root from a
+URL it holds. Nothing in it makes `/space/{id}/` a peer of `/spaces/`. The
+"base URL" every repo stored (`host`, `storageServerUrl`, `wasServerUrl`,
+`profile_sync.serverUrl`) was a convention of ours, and the only two inputs
+a consumer can actually hold are the service URL and a Spaces URL (a HEAD
+on either yields the `service` link).
+
+A client obtains a Space URL from `Location` when it creates the Space,
+from a linkset, or by resolving the Space's did:webvh, whose colon segments
+after the host are the full path prefix. That last derivation is the one
+that remains, and it is the DID method's, not ours; wallet-core owns it as
+the inverse of the template that mints the DID. No wallet holds a
+`spaceId` without the DID, so a URL template member on the service
+description was considered and rejected. The decision is was-client's
+record 0002 (proposed 2026-10-27). was-client 0.100.0 (2026-10-28)
+implements it: `WasClient` takes `{ serviceUrl }` or `{ spacesUrl }`,
+`spaceAt(url)` replaces `space(id)`, the `./paths` builders take a
+`spaceUrl`, and the Space a capability belongs to is read off its chain root
+(`spaceUrlOf`). Until the wallet follow-ups (WC-307, FW-694, WR-98, DCW-104)
+land, those repos still store a base URL and pin was-client below 0.100.0,
+and a parameter named `storageServerUrl` there expects that base.
 
 ### A spec anchor named in an export manifest is permanent wire text
 

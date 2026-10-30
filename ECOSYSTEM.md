@@ -63,7 +63,7 @@ wallet-core.
 
 | Spec repo                                              | Owns                                                                                     | Implemented by                                                                                      |
 |--------------------------------------------------------|------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| wallet-attached-storage-spec (W3C CCG; co-edited here) | Space / Collection / Resource model, HTTP API, zcap profile                              | was-teaching-server (authoritative protocol description in its AGENTS.md), was-client, storage-core |
+| portable-web-spaces-spec (W3C CCG; co-edited here) | Space / Collection / Resource model, HTTP API, zcap profile                              | was-teaching-server (authoritative protocol description in its AGENTS.md), was-client, storage-core |
 | app-connect-spec                                       | AppConnectQuery, app-key credential, descriptor vocabulary, action ceilings, response VP | wallet-core `/request`, was-react, both wallets                                                     |
 | encrypted-collections-spec                             | Envelope cryptography, key epochs, recipient derivation                                  | was-client `/edv`, wallet-core `/keys`                                                              |
 

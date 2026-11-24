@@ -1584,3 +1584,40 @@ set that travels with the account (the annex pointers) is a new disclosure
 and has to be accepted as one. The rule: before arguing that a disclosure
 is "already inside" an accepted one, read which party stores the record
 the accepted disclosure is derived from.
+
+### A delegation signed by a key cannot publish the entry that removes that key and then keep working
+
+Learned 2026-11-23 (the freewallet design for completing a torn transient
+recovery, recorded in freewallet's
+`decisions/0055-a-ladder-only-actor-does-not-strike-its-own-ladder-vm.md`).
+wallet-core's last-client transition strikes a credential's ladder VM and
+installs it again, to mint a fresh inventory-changing version of the
+account log. A note proposed the same pair for a ceremony that holds no
+enrolled client and writes the log through the bridge delegation in its
+unlock record. That delegation is signed by the ladder VM. Under the
+current-key-set rule the server settles a delegation against the document
+as resolved now, so the bridge stops verifying when the strike lands. The
+install is refused and the account is left with no standing credential.
+The pair is safe in the last-client transition only because an enrolled
+client root-invokes both entries. The rule: before reusing a two-entry
+sequence from another ceremony, check which key authorizes the second
+entry and whether the first entry removes it. A sequence that is safe
+under a root invocation can be fatal under a delegation.
+
+### Before drafting a spec exception, find out whose rule the conflict comes from
+
+Learned 2026-11-23 (the same freewallet design as the entry above). A
+torn ceremony's completing roster append could not satisfy two rules at
+once. The Encrypted Collections profile says a writer names the
+controller head it last verified. The wallets' roster-append license
+(clause B, canonical in app-connect-spec's
+`decisions/0003-ladder-authority-clauses.md`) accepted only an entry
+naming the licensed version itself. The first answer was an exception in
+the profile text, and it was approved and drafted. The license appears
+nowhere in that profile. It is the wallets' own verifier-side rule, so
+the exception would have changed normative text other implementers read
+in order to work around it. Widening the license was simpler and safer.
+The writer names its true head, the entry seals the log through that
+head, and the completer needs no membership check over a skipped span.
+The rule: when two rules conflict, read where each one is stated before
+choosing which to bend. Bend the one the ecosystem owns alone.
